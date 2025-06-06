@@ -1,1 +1,172 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import networkx as nx
+import random
+
+def is_valid_move(board, x, y, N):
+    return 0 <= x < N and 0 <= y < N and board[x][y] == -1
+
+def solve_knights_tour_backtracking(N, closed_tour, start_x, start_y):
+    # Define possible moves for the knight
+    moves = [
+        (2, 1), (1, 2), (-1, 2), (-2, 1),
+        (-2, -1), (-1, -2), (1, -2), (2, -1)
+    ]
+
+    # Initialize the board
+    board = np.full((N, N), -1)
+
+    # Starting position
+    board[start_x][start_y] = 0
+
+    def backtrack(x, y, move_count):
+        if move_count == N * N:
+            if closed_tour:
+                # Check if the last move connects back to the start
+                for dx, dy in moves:
+                    if x + dx == start_x and y + dy == start_y:
+                        return True
+                return False
+            return True
+
+        # Sort moves by Warnsdorff's heuristic (least onward moves first)
+        sorted_moves = sorted(
+            [(dx, dy) for dx, dy in moves if is_valid_move(board, x + dx, y + dy, N)],
+            key=lambda move: len([
+                (nx, ny) for nx, ny in 
+                [(x + move[0] + mx, y + move[1] + my) for mx, my in moves]
+                if is_valid_move(board, nx, ny, N)
+            ])
+        )
+
+        for dx, dy in sorted_moves:
+            next_x, next_y = x + dx, y + dy
+            if is_valid_move(board, next_x, next_y, N):
+                board[next_x][next_y] = move_count
+                if backtrack(next_x, next_y, move_count + 1):
+                    return True
+                # Backtrack
+                board[next_x][next_y] = -1
+
+        return False
+
+    if not backtrack(start_x, start_y, 1):
+        print("Solution does not exist.")
+        return None
+
+    return board
+
+def solve_knights_tour_las_vegas(N, closed_tour, start_x, start_y):
+    # Define possible moves for the knight
+    moves = [
+        (2, 1), (1, 2), (-1, 2), (-2, 1),
+        (-2, -1), (-1, -2), (1, -2), (2, -1)
+    ]
+
+    retries = 0
+
+    while True:
+        retries += 1
+        # Initialize the board
+        board = np.full((N, N), -1)
+        board[start_x][start_y] = 0
+        x, y = start_x, start_y
+
+        for move_count in range(1, N * N):
+            valid_moves = [(x + dx, y + dy) for dx, dy in moves if is_valid_move(board, x + dx, y + dy, N)]
+
+            if not valid_moves:
+                break
+
+            # Randomly choose the next move
+            next_x, next_y = random.choice(valid_moves)
+            board[next_x][next_y] = move_count
+            x, y = next_x, next_y
+
+        else:
+            if not closed_tour or any(x + dx == start_x and y + dy == start_y for dx, dy in moves):
+                print(f"Solution found after {retries} retries.")
+                return board
+
+    return None
+
+def visualize_knights_tour_chessboard(board):
+    N = len(board)
+    fig, ax = plt.subplots(figsize=(8, 8))
+    
+    # Draw the chessboard
+    chessboard = np.zeros((N, N))
+    for i in range(N):
+        for j in range(N):
+            if (i + j) % 2 == 0:
+                chessboard[i, j] = 1
+    
+    ax.imshow(chessboard, cmap="gray", extent=(0, N, 0, N))
+
+    # Add the knight's path with labels
+    for i in range(N):
+        for j in range(N):
+            move_number = board[i, j]
+            if move_number != -1:
+                ax.text(j + 0.5, N - i - 0.5, str(move_number + 1),
+                        ha='center', va='center', fontsize=10, color="red")
+
+    # Add chessboard labels
+    ax.set_xticks(np.arange(N) + 0.5)
+    ax.set_yticks(np.arange(N) + 0.5)
+    ax.set_xticklabels([chr(ord('a') + i) for i in range(N)])
+    ax.set_yticklabels([str(i + 1) for i in range(N)])
+    ax.tick_params(left=False, bottom=False, labelleft=True, labelbottom=True)
+
+    plt.title("Knight's Tour")
+    plt.grid(False)
+    plt.show()
+
+def interface():
+    # Interface for user input
+    solution_type = input("Choose the type of tour: (A) Open or (B) Closed: ").strip().lower()
+    if solution_type not in ['a', 'b']:
+        print("Invalid input. Defaulting to Open Tour.")
+        solution_type = 'a'
+
+    algorithm = input("Choose the algorithm: (A) Backtracking or (B) Las Vegas: ").strip().lower()
+    if algorithm not in ['a', 'b']:
+        print("Invalid input. Defaulting to Backtracking.")
+        algorithm = 'a'
+
+    closed_tour = solution_type == 'b'
+    start_square = input("Enter the starting square (e.g., 'a1', 'h8'): ").strip().lower()
+    try:
+        start_x = 8 - int(start_square[1])
+        start_y = ord(start_square[0]) - ord('a')
+        if start_x < 0 or start_x >= 8 or start_y < 0 or start_y >= 8:
+            raise ValueError
+    except (IndexError, ValueError):
+        print("Invalid input. Defaulting to starting square 'a1'.")
+        start_x, start_y = 7, 0
+    return algorithm, solution_type, start_x, start_y
+
+def run_algorithm(algorithm, closed_tour, start_x, start_y):
+    # Solve and visualize the Knight's Tour
+    if algorithm == 'a':
+        solution = solve_knights_tour_backtracking(8, closed_tour, start_x, start_y)
+    else:
+        solution = solve_knights_tour_las_vegas(8, closed_tour, start_x, start_y)
+
+    if solution is not None:
+        print("Solution:")
+        print(solution)
+        visualize_knights_tour_chessboard(solution)
+
+# entry point
+def main():
+    # get user input for the algorithm and starting square
+    algorithm, tour_type, start_x, start_y = interface()
+    
+    # run the algorithm selected with the starting square
+    run_algorithm(algorithm, tour_type, start_x, start_y)
+
+
+
+main()
 
